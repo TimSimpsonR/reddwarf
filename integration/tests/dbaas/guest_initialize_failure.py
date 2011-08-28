@@ -53,6 +53,33 @@ from tests.util import TestClient
 
 FLAGS = flags.FLAGS
 
+# TODO(tim.simpson): Tests are needed for the following cases:
+#
+# When provisioning an instance:
+# A volume fails to provision:
+#     This can be because there is not sufficient space or the account limits
+#     are exceeded. There is anothet trickier third case where the volume
+#     might be provisioning but is timed out, and must be deleted.
+#   In these cases the status must be FAIL. No resources should be counted
+#     against the user's account, unless it was via a time-out (this is so the
+#     volume can finish creating and we can look at it). However when deleted
+#     the volume should also be deleted, and after this point not count against
+#     the user's quotas.
+#
+# The compute instance fails to provision, as an error occurs. The state must
+#     be set to FAIL. In this case the compute instance is set to suspended
+#     but not deleted (if it even exists in any state) so this may or may not
+#     count against a user's quotas
+#   When deleted the instance should vanish along with the volumes and all
+#     quotas be returned to where they were before.
+#
+# The guest install times out. In this case the state must be set to FAIL and
+#     must stay there! When delete is called, the instance and volume should
+#     dissappear.
+#
+# In addition to GETs and LISTs returning FAIL as the state, attempts to
+# add databases should fail.
+#
 
 class ContainerTestInfo(object):
     """Stores new container information used by dependent tests."""
