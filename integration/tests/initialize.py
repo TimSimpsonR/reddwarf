@@ -178,9 +178,7 @@ class Volume(unittest.TestCase):
     """Starts the volume service."""
 
     def setUp(self):
-        self.service = Service(python_cmd_list() +
-                               ["%s/bin/nova-volume" % nova_code_root(),
-                                "--flagfile=%s" % nova_conf() ])
+        self.service = test_config.volume_service
 
     def test_start(self):
         if not either_web_service_is_up():

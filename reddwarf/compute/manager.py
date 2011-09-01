@@ -36,6 +36,9 @@ flags.DEFINE_integer('reddwarf_guest_initialize_time_out', 10 * 60,
 flags.DEFINE_integer('reddwarf_instance_suspend_time_out', 3 * 60,
                      'Time in seconds for a compute instance to suspend '
                      'during when aborted before a PollTimeOut is raised.')
+flags.DEFINE_integer('reddwarf_volume_time_out', 10 * 60,
+                     'Time in seconds for an instance to wait for a volume '
+                     'to be provisioned before aborting.')
 
 FLAGS = flags.FLAGS
 LOG = logging.getLogger(__name__)
@@ -174,12 +177,14 @@ class ReddwarfInstanceInitializer(object):
             compute_manager.suspend_instance(self.context, self.instance_id)
             return False
 
-    def initialize_volume(self, volume_api, volume_client, host):
+    def initialize_volume(self, compute_manager, volume_api, volume_client,
+                          host):
         try:
             self._ensure_volume_is_ready(volume_api, volume_client, host)
             return True
         except Exception as exception:
             self._set_instance_status_to_fail()
+            compute_manager.suspend_instance(self.context, self.instance_id)
             self._notify_of_failure(exception=exception,
                 event_type='reddwarf.instance.abort.volume',
                 audit_msg=_("Aborting instance %(instance_id)d because "
@@ -201,17 +206,19 @@ class ReddwarfInstanceInitializer(object):
     def _wait_until_volume_is_ready(self):
         """Sleeps until the given volume has finished provisioning."""
         # TODO(tim.simpson): This needs a time out.
-        def get_status():
+        def volume_is_available():
             volume = self.db.volume_get(self.context, self.volume_id)
             status = volume['status']
+            LOG.debug("DOG %s" % status)
             if status == 'creating':
-                return
+                return False
             elif status == 'available':
-                raise utils.LoopingCallDone(retvalue=volume)
+                return True
             elif status != 'available':
                 LOG.error("STATUS: %s" % status)
                 raise VolumeProvisioningError(volume_id=self.volume_id)
-        return utils.LoopingCall(get_status).start(3).wait()
+        utils.poll_until(volume_is_available, sleep_time=1,
+                         time_out=FLAGS.reddwarf_volume_time_out)
 
 
 class ReddwarfComputeManager(ComputeManager):
@@ -236,7 +243,7 @@ class ReddwarfComputeManager(ComputeManager):
             metadata.volume_mount_point, metadata.databases)
         compute_manager = super(ReddwarfComputeManager, self)
         # If any steps return False, cancel subsequent steps.
-        (instance.initialize_volume(self.volume_api, self.volume_client,
-                                    self.host) and
+        (instance.initialize_volume(compute_manager, self.volume_api,
+                                    self.volume_client, self.host) and
          instance.initialize_compute_instance(compute_manager, **kwargs) and
          instance.initialize_guest(compute_manager, self.guest_api))

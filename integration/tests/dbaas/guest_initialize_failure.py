@@ -15,6 +15,7 @@
 
 import time
 from tests import util
+from nova.exception import VolumeNotFound
 
 GROUP='dbaas.guest.initialize.failure'
 
@@ -32,10 +33,13 @@ from proboscis import after_class
 from proboscis import before_class
 from proboscis import test
 from proboscis.asserts import assert_equal
+from proboscis.asserts import assert_false
+from proboscis.asserts import assert_is_not_none
+from proboscis.asserts import fail
 from proboscis.decorators import expect_exception
 from proboscis.decorators import time_out
 
-from reddwarf.compute.manager import VALID_ABORT_STATES
+from reddwarf.compute.manager import VALID_ABORT_STATES, ReddwarfInstanceMetaData
 
 from tests.util import test_config
 from tests.util import test_config
@@ -79,11 +83,9 @@ FLAGS = flags.FLAGS
 # add databases should fail.
 #
 
-GUEST_INSTALL_TIMEOUT = 60 * 2
-
 @test(groups=[GROUP],
       depends_on_groups=["services.initialize"])
-class VerifyManagerAbortsInstanceWhenInstallFails(object):
+class InstanceTest(object):
     """Stores new container information used by dependent tests."""
 
     def __init__(self):
@@ -102,11 +104,8 @@ class VerifyManagerAbortsInstanceWhenInstallFails(object):
 
         self.initial_result = None # The initial result from the create call.
 
-    @before_class
-    def setUp(self):
+    def init(self, name_prefix):
         """Sets up the client."""
-        restart_compute_service(['--reddwarf_guest_initialize_time_out=%d'
-                                 % GUEST_INSTALL_TIMEOUT])
         # Find user, create DBAAS rich client
         self.user = test_config.users.find_user(Requirements(is_admin=True))
         self.dbaas = create_test_client(self.user)
@@ -116,15 +115,36 @@ class VerifyManagerAbortsInstanceWhenInstallFails(object):
         # Get flavor
         result = self.dbaas.find_flavor_and_self_href(flavor_id=1)
         self.dbaas_flavor, self.dbaas_flavor_href = result
-        self.name = "TEST_FAIL_" + str(datetime.now())
+        self.name = name_prefix + str(datetime.now())
+        # TODO: Grab initial amount of disk space left in account quota
 
-    @after_class
-    def tearDown(self):
-        """Be nice to other tests and restart the compute service normally."""
-        restart_compute_service()
+    def _assert_status_failure(self, result):
+        """Checks if status==FAILED, plus asserts REST API is in sync."""
+        if result[0].state == power_state.BUILDING:
+            assert_true(
+                result[1].status == _dbaas_mapping[power_state.BUILDING] or
+                result[1].status == _dbaas_mapping[power_state.FAILED],
+                "Result status from API should only be BUILDING or FAILED"
+                " at this point but was %s" % result[1].status)
+            return False
+        else:
+            # After building the only valid state is FAILED (because
+            # we've destroyed the container).
+            assert_equal(result[0].state, power_state.FAILED)
+            # Make sure the REST API agrees.
+            assert_equal(result[1].status, _dbaas_mapping[power_state.FAILED])
+            return True
 
-    @test
-    def create_container(self):
+    def _assert_volume_is_eventually_deleted(self, time_out=3*60):
+        def volume_not_found():
+            try:
+                self.db.volume_get(context.get_admin_context(), self.volume_id)
+                return False
+            except VolumeNotFound:
+                return True
+        utils.poll_until(volume_not_found, sleep_time=1, time_out=time_out)
+
+    def _create_instance(self):
         """Make call to create a container."""
         self.initial_result = self.dbaas.dbcontainers.create(
             name=self.name,
@@ -136,7 +156,136 @@ class VerifyManagerAbortsInstanceWhenInstallFails(object):
         self.id = result.id
         assert_equal(result.status, _dbaas_mapping[power_state.BUILDING])
 
-    @test(depends_on=[create_container])
+    def _get_status_tuple(self):
+        """Grabs the db guest status and the API instance status."""
+        return (dbapi.guest_status_get(self.id),
+                self.dbaas.dbcontainers.get(self.id))
+
+    def _delete_instance(self):
+        self.dbaas.dbcontainers.delete(self.id)
+        attempts = 0
+        try:
+            time.sleep(1)
+            result = True
+            while result is not None:
+                attempts += 1
+                result = self.dbaas.dbcontainers.get(self.id)
+                assert_equal(_dbaas_mapping[power_state.SHUTDOWN],
+                             result.status)
+        except NotFound:
+            pass
+        except Exception as ex:
+            fail("A failure occured when trying to GET container %s"
+                 " for the %d time: %s" % (str(self.id), attempts, str(ex)))
+
+    def _get_compute_instance_state(self):
+        return self.db.instance_get(context.get_admin_context(),
+                                    self.id).state
+
+    def wait_for_rest_api_to_show_status_as_failed(self, time_out):
+        utils.poll_until(self._get_status_tuple, self._assert_status_failure,
+                         sleep_time=1, time_out=time_out)
+
+    def wait_for_compute_instance_to_suspend(self):
+        """Polls until the compute instance is known to be suspended."""
+        utils.poll_until(self._get_compute_instance_state,
+                         lambda state : state in VALID_ABORT_STATES,
+                         sleep_time=1,
+                         time_out=FLAGS.reddwarf_instance_suspend_time_out)
+
+
+#TODO: Change volume timeout to something very low, and make sure the instance
+# is set to fail.  If it isn't possible to make sure the volume never
+# provisions this could also be a reaper test.
+
+VOLUME_TIME_OUT=30
+@test(groups=[GROUP, GROUP + ".volume"],
+      depends_on_groups=["services.initialize"], enabled=False)
+class VerifyManagerAbortsInstanceWhenVolumeFails(InstanceTest):
+
+    @before_class
+    def setUp(self):
+        """Sets up the client."""
+        test_config.volume_service.stop()
+        assert_false(test_config.volume_service.is_running)
+        restart_compute_service(['--reddwarf_volume_time_out=%d'
+                                 % VOLUME_TIME_OUT])
+        self.init("TEST_FAIL_VOLUME_")
+
+    @after_class
+    def tearDown(self):
+        """Be nice to other tests and restart the compute service normally."""
+        test_config.volume_service.start()
+        restart_compute_service()
+
+    @test
+    def create_instance(self):
+        """Create a new instance."""
+        self._create_instance()
+        # Use an admin context to avoid the possibility that in between the
+        # previous line and this one the request goes through and the container
+        # is deleted.
+        metadata = ReddwarfInstanceMetaData(self.db,
+            context.get_admin_context(), self.id)
+        self.volume_id = metadata.volume_id
+
+    @test(depends_on=[create_instance])
+    def wait_for_failure(self):
+        """Make sure the Reddwarf Compute Manager FAILS a timed-out volume."""
+        self.wait_for_rest_api_to_show_status_as_failed(VOLUME_TIME_OUT + 30)
+
+    @test(depends_on=[wait_for_failure])
+    def delete_instance(self):
+        """Delete the instance."""
+        #TODO: Put this in once the OpenVZ driver's destroy() method doesn't
+        # raise an exception when the volume doesn't exist.
+        #self._delete_instance()
+
+    @test(depends_on=[wait_for_failure])
+    def volume_should_be_deleted(self):
+        """Make sure the volume is gone."""
+        #TODO: Test that the volume, when it comes up, is eventually deleted
+        # by the Reaper.
+        #@expect_exception(VolumeNotFound)
+        #self._assert_volume_is_eventually_deleted()
+
+
+#TODO: Find some way to get the compute instance creation to fail.
+
+GUEST_INSTALL_TIMEOUT = 60 * 2
+
+@test(groups=[GROUP, GROUP + ".guest"],
+      depends_on_groups=["services.initialize"])
+class VerifyManagerAbortsInstanceWhenGuestInstallFails(InstanceTest):
+    """Stores new container information used by dependent tests."""
+
+    @before_class
+    def setUp(self):
+        """Sets up the client."""
+        restart_compute_service(['--reddwarf_guest_initialize_time_out=%d'
+                                 % GUEST_INSTALL_TIMEOUT])
+        self.init("TEST_FAIL_GUEST_")
+
+    @after_class
+    def tearDown(self):
+        """Be nice to other tests and restart the compute service normally."""
+        restart_compute_service()
+
+    @test
+    def create_instance(self):
+        self._create_instance()
+        metadata = ReddwarfInstanceMetaData(self.db,
+            context.get_admin_context(), self.id)
+        self.volume_id = metadata.volume_id
+        assert_is_not_none(metadata.volume)
+        
+#    @test
+#    def create_container(self):
+#        """Make call to create a container."""
+#        super(VerifyManagerAbortsInstanceWhenGuestInstallFails, self).\
+#            create_container()
+
+    @test(depends_on=[create_instance])
     @time_out(60 * 4)
     def wait_for_compute_instance_to_start(self):
         """Wait for the compute instance to begin."""
@@ -151,7 +300,7 @@ class VerifyManagerAbortsInstanceWhenInstallFails(object):
                 break
 
 
-    @test(depends_on=[create_container])
+    @test(depends_on=[create_instance])
     @time_out(60 * 4)
     def wait_for_pid(self):
         """Wait for container PID."""
@@ -171,33 +320,13 @@ class VerifyManagerAbortsInstanceWhenInstallFails(object):
             else:
                 break
 
-    def _assert_status_failure(self, result):
-        """Checks if status==FAILED, plus asserts REST API is in sync."""
-        if result[0].state == power_state.BUILDING:
-            assert_true(
-                result[1].status == _dbaas_mapping[power_state.BUILDING] or
-                result[1].status == _dbaas_mapping[power_state.FAILED],
-                "Result status from API should only be BUILDING or FAILED"
-                " at this point but was %s" % result[1].status)
-            return False
-        else:
-            # After building the only valid state is FAILED (because
-            # we've destroyed the container).
-            assert_equal(result[0].state, power_state.FAILED)
-            # Make sure the REST API agrees.
-            assert_equal(result[1].status, _dbaas_mapping[power_state.FAILED])
-            return True
-
-    def _get_compute_instance_state(self):
-        return self.db.instance_get(context.get_admin_context(),
-                                    self.id).state
-
-    def _get_status_tuple(self):
-        """Grabs the db guest status and the API instance status."""
-        return (dbapi.guest_status_get(self.id),
-                self.dbaas.dbcontainers.get(self.id))
-
     @test(depends_on=[wait_for_compute_instance_to_start, wait_for_pid])
+    def should_have_created_volume(self):
+        #TODO: Make sure volume exists here
+        #TODO: Make sure memory is allocated
+        pass
+
+    @test(depends_on=[should_have_created_volume])
     def destroy_guest_and_wait_for_failure(self):
         """Make sure the Reddwarf Compute Manager FAILS a timed-out guest."""
 
@@ -206,9 +335,8 @@ class VerifyManagerAbortsInstanceWhenInstallFails(object):
 
         # Make sure that before the timeout expires the guest state in the
         # internal API and the REST API dbcontainer status is set to FAIL.
-        utils.poll_until(self._get_status_tuple, self._assert_status_failure,
-                         sleep_time=1,
-                         time_out=GUEST_INSTALL_TIMEOUT + 15)
+        self.wait_for_rest_api_to_show_status_as_failed(
+            time_out=GUEST_INSTALL_TIMEOUT + 30)
 
         # At this point there is a tiny chance the compute API will spend a
         # little bit of time trying to suspend the instance. We need it to
@@ -218,10 +346,7 @@ class VerifyManagerAbortsInstanceWhenInstallFails(object):
         # change its status to something besides FAILED before the container is
         # shut-off. So we have to make sure that the container turns off, and
         # the manager sets the guest state to FAILED afterwards.
-        utils.poll_until(self._get_compute_instance_state,
-                         lambda state : state in VALID_ABORT_STATES,
-                         sleep_time=1,
-                         time_out=FLAGS.reddwarf_instance_suspend_time_out)
+        self.wait_for_compute_instance_to_suspend()
 
         #TODO(tim.simpson): It'd be really cool if we could somehow coax the
         #                   guest to repeatedly setting its state in the db to
@@ -229,3 +354,14 @@ class VerifyManagerAbortsInstanceWhenInstallFails(object):
         #                   no matter what after it was suspended it was set
         #                   to such.  Although maybe that's overkill.
         self._assert_status_failure(self._get_status_tuple())
+
+    @test(depends_on=[destroy_guest_and_wait_for_failure])
+    def delete_instance(self):
+        self._delete_instance()
+
+    @test(depends_on=[delete_instance])
+    def make_sure_resources_are_removed(self):
+        #TODO: Make sure the initial disk space is back to where it was,
+        # i.e. the associated volume was deleted.
+        #Make sure memory is where it was.
+        self._assert_volume_is_eventually_deleted(3*60)

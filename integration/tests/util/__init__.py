@@ -149,8 +149,7 @@ def process(cmd):
 
 def restart_compute_service(extra_args=None):
     extra_args = extra_args or []
-    test_config.compute_service.restart(
-            extra_args=['--reddwarf_guest_initialize_time_out=120'])
+    test_config.compute_service.restart(extra_args=extra_args)
     # Be absolutely certain the compute manager is ready before passing control
     # back to caller.
     utils.poll_until(lambda: hosts_up('compute'),
