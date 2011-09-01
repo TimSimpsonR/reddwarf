@@ -18,10 +18,12 @@
 import json
 import os
 
+from tests.util.services import Service
 from tests.util.services import WebService
 
 __all__ = [
     "auth_url",
+    "compute_service",
     "dbaas",
     "dbaas_image",
     "glance_code_root",
@@ -101,6 +103,7 @@ def _setup():
     from tests.util.users import Users
     global nova_auth_url
     global reddwarf_auth_url
+    global compute_service
     global dbaas
     global nova
     global users
@@ -128,6 +131,10 @@ def _setup():
                           ["%s/bin/nova-api" % nova_code_root,
                            "--flagfile=%s" % nova_conf],
                       url=nova_url)
+    compute_service = Service(cmd=python_cmd_list() +
+                              ["%s/bin/nova-compute" % nova_code_root,
+                               "--flagfile=%s" % nova_conf ])
+
     users = Users(values["users"])
     dbaas_image = values.get("dbaas_image", None)
     typical_nova_image_name = values.get("typical_nova_image_name", None)

@@ -166,9 +166,7 @@ class Compute(unittest.TestCase):
     """Starts the compute service."""
 
     def setUp(self):
-        self.service = Service(python_cmd_list() +
-                               ["%s/bin/nova-compute" % nova_code_root(),
-                                "--flagfile=%s" % nova_conf() ])
+        self.service = test_config.compute_service
 
     def test_start(self):
         if not either_web_service_is_up():
