@@ -36,6 +36,9 @@ class FutureDomain(FutureResource):
     def convert_callback(self, resp, body):
         return Domain(self.manager, body)
 
+    def response_list_name(self):
+        return "domains"
+
 
 class DomainsManager(base.ManagerWithFind):
     """

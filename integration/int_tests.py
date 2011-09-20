@@ -109,7 +109,7 @@ if __name__ == '__main__':
 
     # The DNS stuff is problematic. Not loading the other tests allow us to
     # run its functional tests only.
-    if not os.environ.get("SHOW_DNS_ENTRIES", 'False') == 'True':
+    if not os.environ.get("ADD_DOMAINS", "False") == 'True':
         from tests import initialize
         from tests.dbaas import dbaas_ovz
         from tests.dbaas import dns

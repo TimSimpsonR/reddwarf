@@ -72,16 +72,13 @@ class RsDnsDriverTests(object):
 
     def create_domain_if_needed(self):
         """Adds the domain specified in the flags."""
-        if os.environ.get("ADD_DOMAINS", "False") == 'True':
-            print("Creating domain %s" % driver.default_dns_zone.name)
-            future = self.driver.dns_client.domains.create(
-                self.driver.default_dns_zone.name)
-            while not future.ready:
-                time.sleep(2)
-            print("Got something: %s" % future.resource)
-            print("The domain should have been created.")
-        else:
-            raise RuntimeError("Could not find default dns zone.")
+        print("Creating domain %s" % self.driver.default_dns_zone.name)
+        future = self.driver.dns_client.domains.create(
+            self.driver.default_dns_zone.name)
+        while not future.ready:
+            time.sleep(2)
+        print("Got something: %s" % future.resource)
+        print("The domain should have been created.")
 
     @test
     @time_out(2 * 60)
@@ -100,7 +97,7 @@ class RsDnsDriverTests(object):
             return False
         if zone_found():
             return
-        create_domain_if_needed()
+        self.create_domain_if_needed()
         for i in range(5):
             if zone_found():
                 return
@@ -115,14 +112,14 @@ class RsDnsDriverTests(object):
           enabled=FLAGS.dns_domain_name != "dbaas.rackspace.com")
     def delete_all_entries(self):
         """Deletes all entries under the default domain."""
-        list = self.driver.get_entries_by_name(name=TEST_NAME)
+        list = self.driver.get_entries()
         for entry in list:
             self.driver.delete_entry(name=entry.name, type=entry.type,
-                                dns_zone=entry.dns_zone)
+                                     dns_zone=entry.dns_zone)
         # It takes awhile for them to be deleted.
         utils.poll_until(lambda : self.driver.get_entries_by_name(TEST_NAME),
                          lambda list : len(list) == 0,
-                         sleep_time=2, time_out=60)
+                         sleep_time=4, time_out=60)
 
     @test(depends_on=[delete_all_entries])
     def create_test_entry(self):

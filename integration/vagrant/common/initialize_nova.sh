@@ -36,10 +36,13 @@ mysql -u root -pnova -e "FLUSH PRIVILEGES;"
 exclaim Initializing Nova database.
 
 cat /vagrant-common/nova.conf.template > /home/vagrant/nova.conf
+# Add the domain name, make it different each time
+uuid | sed s/^/--dns_domain_name=/ | sed s/$/-dbaas-tests.com/  >> /home/vagrant/nova.conf
 if [ -d /extra ]
 then
     cat /extra/nova.conf >> /home/vagrant/nova.conf
 fi
+
 
 glance_manage () {
     echo glance-manage $@
@@ -123,6 +126,9 @@ then
     sudo -E INSTALL_GLANCE_IMAGE=True NOVASRC=/src /tests/run_tests_nv.sh --conf=/tests/vagrant/host/host.nemesis.conf --group=services.initialize.glance
 fi
 
+# Make sure the domain name exists
+cd /tests
+sudo -E ADD_DOMAINS=True NOVASRC=/src /tests/run_tests_nv.sh --conf=/tests/vagrant/host/host.nemesis.conf --group=rsdns.domains
 
 exclaim Setting up Networking
 
@@ -183,3 +189,5 @@ exit 0
 # TODO: It may be necessary to delete all other instances of this.
 
 # TODO: Add the fake LVM stuff so nova volumes doesnt complain (see baz' wiki article)
+
+
