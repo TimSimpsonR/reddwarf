@@ -16,6 +16,7 @@
 import time
 from tests import util
 from nova.exception import VolumeNotFound
+from nova.scheduler.driver import Scheduler
 
 GROUP='dbaas.guest.initialize.failure'
 
@@ -170,6 +171,25 @@ class VerifyManagerAbortsInstanceWhenGuestInstallFails(InstanceTest):
         restart_compute_service()
 
     @test
+    def wait_for_compute_host_up(self):
+        """Wait for the compute host to appear as ready again.
+
+        If we don't do this, the scheduler will fail it.
+
+        """
+        def ready():
+            results = self.db.service_get_all_compute_memory(
+                context.get_admin_context())
+            for result in results:
+                (service, memory_mb) = result
+                needed_memory = memory_mb + 512
+                if needed_memory <= FLAGS.max_instance_memory_mb and \
+                   Scheduler.service_is_up(service):
+                    return True
+            return False
+        utils.poll_until(ready, sleep_time=2, time_out=60)
+
+    @test(depends_on=[wait_for_compute_host_up])
     def create_instance(self):
         self._create_instance()
         metadata = ReddwarfInstanceMetaData(self.db,
