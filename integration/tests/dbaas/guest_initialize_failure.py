@@ -100,12 +100,17 @@ class VerifyManagerAbortsInstanceWhenVolumeFails(InstanceTest):
         restart_compute_service(['--reddwarf_volume_time_out=%d'
                                  % VOLUME_TIME_OUT])
         self.init("TEST_FAIL_VOLUME_")
+        self.instance_exists = False
 
     @after_class
     def tearDown(self):
         """Be nice to other tests and restart the compute service normally."""
+        # Wipe the instance from the DB so it won't count against us.
         test_config.volume_service.start()
         restart_compute_service()
+        if self.instance_exists:
+            self.db.instance_destroy(context.get_admin_context(), self.id)
+
 
     @test
     def create_instance(self):
@@ -121,14 +126,18 @@ class VerifyManagerAbortsInstanceWhenVolumeFails(InstanceTest):
     @test(depends_on=[create_instance])
     def wait_for_failure(self):
         """Make sure the Reddwarf Compute Manager FAILS a timed-out volume."""
+        self.instance_exists = True
         self.wait_for_rest_api_to_show_status_as_failed(VOLUME_TIME_OUT + 30)
 
     @test(depends_on=[wait_for_failure])
+    @time_out(2 * 60)
     def delete_instance(self):
         """Delete the instance."""
-        #TODO: Put this in once the OpenVZ driver's destroy() method doesn't
-        # raise an exception when the volume doesn't exist.
+        #TODO: This will fail because the OpenVZ driver's destroy() method
+        # raises an exception when the volume doesn't exist.
         #self._delete_instance()
+        #TODO: Use the method above once it won't result in a loop.
+        self.dbaas.instances.delete(self.id)
 
     @test(depends_on=[wait_for_failure])
     def volume_should_be_deleted(self):
@@ -167,25 +176,9 @@ class VerifyManagerAbortsInstanceWhenGuestInstallFails(InstanceTest):
             context.get_admin_context(), self.id)
         self.volume_id = metadata.volume_id
         assert_is_not_none(metadata.volume)
-        
 
     @test(depends_on=[create_instance])
-    @time_out(60 * 4)
-    def wait_for_compute_instance_to_start(self):
-        """Wait for the compute instance to begin."""
-        while True:
-            status, err = process("sudo vzctl status %s | awk '{print $5}'"
-                                  % str(self.id))
-
-            if not string_in_list(status, ["running"]):
-                time.sleep(5)
-            else:
-                assert_equal("running", status.strip())
-                break
-
-
-    @test(depends_on=[create_instance])
-    @time_out(60 * 4)
+    @time_out(60 * 6)
     def wait_for_pid(self):
         """Wait for instance PID."""
         pid = None
@@ -202,6 +195,20 @@ class VerifyManagerAbortsInstanceWhenGuestInstallFails(InstanceTest):
                 assert_equal(_dbaas_mapping[power_state.BUILDING],
                              rest_api_result.status)
                 time.sleep(10)
+
+    @test(depends_on=[wait_for_pid])
+    @time_out(60 * 6)
+    def wait_for_compute_instance_to_start(self):
+        """Wait for the compute instance to begin."""
+        while True:
+            status, err = process("sudo vzctl status %s | awk '{print $5}'"
+                                  % str(self.id))
+
+            if not string_in_list(status, ["running"]):
+                time.sleep(5)
+            else:
+                assert_equal("running", status.strip())
+                break
 
     @test(depends_on=[wait_for_compute_instance_to_start, wait_for_pid])
     def should_have_created_volume(self):

@@ -113,7 +113,6 @@ if __name__ == '__main__':
         from tests import initialize
         from tests.dbaas import dbaas_ovz
         from tests.dbaas import dns
-        from tests.dbaas import guest_initialize_failure
         from tests.dbaas import flavors
         from tests.guest import dbaas_tests
         from tests.guest import pkg_tests
@@ -122,6 +121,7 @@ if __name__ == '__main__':
         from tests.scheduler import SCHEDULER_DRIVER_GROUP
         from tests.volumes import driver
         from tests.volumes import VOLUMES_DRIVER
+        from tests.dbaas import guest_initialize_failure
 
         from tests import util
 
