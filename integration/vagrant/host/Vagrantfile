@@ -29,6 +29,9 @@ Vagrant::Config.run do |global_config|
       end
       config.vm.share_folder "vagrant-common", "/vagrant-common", "./../common"
       config.vm.share_folder "tests", "/tests", "./../../"
+      if ENV['SNEAKY_PETE_DIR']
+        config.vm.share_folder "pete", "/pete", ENV['SNEAKY_PETE_DIR']
+      end
   end
 
   # Volume Config
