@@ -270,5 +270,11 @@ if __name__ == '__main__':
     runner.init()
     MAIN_RUNNER = runner
 
+    # Turn off the following "feature" of the unittest module in case we want
+    # to start a REPL.
+    sys.exit = lambda x : None
     proboscis.TestProgram(argv=nose_args, groups=groups,
                           testRunner=runner).run_and_exit()
+
+    sys.stdout = sys.__stdout__
+    sys.stderr = sys.__stderr__

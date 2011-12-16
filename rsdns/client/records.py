@@ -89,6 +89,9 @@ class RecordsManager(base.ManagerWithFind):
 
         :rtype: list of :class:`Record`
         """
+        url = "/domains/%s/records" % domain_id
+        if record_name:
+            url += "?name=" + record_name
         resp, body = self.api.client.get("/domains/%s/records" % domain_id)
         try:
             list = body['records']            
