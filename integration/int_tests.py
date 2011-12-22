@@ -34,6 +34,11 @@ import unittest
 import sys
 
 
+if os.environ.get("PYCHARM_DEBUG", "False") == 'True':
+    from pydev import pydevd
+    pydevd.settrace('10.0.2.2', port=7864, stdoutToServer=True,
+                    stderrToServer=True)
+
 def add_support_for_localization():
     """Adds support for localization in the logging.
 
