@@ -21,6 +21,7 @@ from nova import flags
 from nova import log as logging
 from nova import exception as nova_exception
 from nova import utils
+from nova.compute import task_states
 from nova.compute import vm_states
 from nova.compute import power_state
 from nova.compute.manager import ComputeManager
@@ -143,7 +144,7 @@ class ReddwarfInstanceInitializer(object):
         self.db.volume_attached(self.context, self.volume_id,
                                 self.instance_id, self.volume_mount_point)
         volume_api.update(self.context, self.volume_id, {})
-    
+
     def initialize_guest(self, guest_api):
         """Tell the guest to initialize itself and wait for it to happen.
 
@@ -239,6 +240,17 @@ class ReddwarfComputeManager(ComputeManager):
         super(ReddwarfComputeManager, self).__init__(*args, **kwargs)
         self.guest_api = guest.API()
         self.compute_manager = super(ReddwarfComputeManager, self)
+
+    def restart(self, context, instance_id):
+        """Reboot an instance on this host."""
+        LOG.audit(_("Rebooting instance %s"), instance_id, context=context)
+        context = context.elevated()
+        instance_ref = self.db.instance_get(context, instance_id)
+        self._instance_update(context, instance_id,
+                              task_state=task_states.REBOOTING)
+        self.guest_api.restart(context, instance_id)
+        self._instance_update(context,instance_id,
+                              task_state=None)
 
     def run_instance(self, context, instance_id, **kwargs):
         """Launch a new instance with specified options.

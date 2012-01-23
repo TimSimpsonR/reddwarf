@@ -137,6 +137,16 @@ def create_test_client(user):
     return TestClient(dbaas_client=dbaas_client, os_client=os_client)
 
 
+def find_mysql_procid_on_instance(local_id):
+    """Returns the process id of MySql on an instance if running, or None."""
+    cmd = "sudo vzctl exec2 %d ps aux | grep /usr/sbin/mysqld " \
+          "| awk '{print $2}'" % local_id
+    stdout, stderr = process(cmd)
+    try:
+        return int(stdout)
+    except ValueError:
+        return None
+
 def init_engine(user, password, host):
     return create_engine("mysql://%s:%s@%s:3306" %
                                (user, password, host),
