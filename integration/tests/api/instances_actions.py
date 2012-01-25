@@ -141,6 +141,7 @@ class RebootTestBase(object):
 
     def successful_restart(self):
         """Restart MySQL via the REST API successfully."""
+        self.fix_mysql()
         self.call_reboot()
         self.wait_for_broken_connection()
         self.wait_for_successful_restart()
@@ -202,20 +203,14 @@ class RestartTests(RebootTestBase):
         self.ensure_mysql_is_running()
 
     @test(depends_on=[test_ensure_mysql_is_running])
-    def test_successful_restart(self):
-        """Restart MySQL via the REST API successfully."""
-        self.successful_restart()
-
-    @test(depends_on=[test_successful_restart])
     def test_unsuccessful_restart(self):
         """Restart MySQL via the REST when it should fail, assert it does."""
         self.unsuccessful_restart()
 
     @after_class(always_run=True)
-    def test_restart_normally(self):
-        """Fix iblogs and reboot normally."""
-        self.restart_normally()
-
+    def test_successful_restart(self):
+        """Restart MySQL via the REST API successfully."""
+        self.successful_restart()    
 
 
 @test(groups=[tests.INSTANCES, INSTANCE_GROUP, GROUP],
@@ -236,34 +231,11 @@ class RebootTests(RebootTestBase):
         self.ensure_mysql_is_running()
 
     @test(depends_on=[test_ensure_mysql_is_running])
-    def test_successful_restart(self):
-        """Restart MySQL via the REST API successfully."""
-        self.successful_restart()
-
-    @test(depends_on=[test_successful_restart])
     def test_unsuccessful_restart(self):
         """Restart MySQL via the REST when it should fail, assert it does."""
         self.unsuccessful_restart()
 
     @after_class(always_run=True)
-    def test_restart_normally(self):
-        """Fix iblogs and reboot normally."""
-        self.restart_normally()
-#
-#    @test
-#    def test_ensure_mysql_is_running(self):
-#        """Make sure MySQL is accessible before restarting."""
-#        self.ensure_mysql_is_running()
-#
-#    @test(depends_on=[test_ensure_mysql_is_running])
-#    def test_successful_restart(self):
-#        """Restart MySQL via the REST API successfully."""
-#        self.successful_restart()
-#
-#    @test(depends_on=[test_successful_restart])
-#    def test_unsuccessful_restart(self):
-#        self.unsuccessful_restart()
-#
-#    @after_class(always_run=True)
-#    def test_restart_normally(self):
-#        self.restart_normally()
+    def test_successful_restart(self):
+        """Restart MySQL via the REST API successfully."""
+        self.successful_restart()
