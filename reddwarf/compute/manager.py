@@ -25,6 +25,8 @@ from nova.compute import task_states
 from nova.compute import vm_states
 from nova.compute import power_state
 from nova.compute.manager import ComputeManager
+from nova.compute.manager import checks_instance_lock
+from nova.exception import wrap_exception as nova_wrap_exception
 from nova.notifier import api as notifier
 from nova.rpc.common import RemoteError
 from nova.volume import api as volume_api
@@ -289,6 +291,46 @@ class ReddwarfComputeManager(ComputeManager):
             self.volume_api.delete_volume_when_available(context,
                                                          volume['id'],
                                                          time_out=60)
+
+    @nova_wrap_exception(notifier=notifier, publisher_id=publisher_id())
+    @checks_instance_lock
+    def reboot_instance(self, context, instance_id):
+        """Reboot an instance on this host."""
+        #TODO(tim.simpson): This is all copy and pasted from Nova.
+        LOG.audit(_("Rebooting instance %s"), instance_id, context=context)
+        context = context.elevated()
+        instance_ref = self.db.instance_get(context, instance_id)
+
+        current_power_state = self._get_power_state(context, instance_ref)
+        self._instance_update(context,
+                              instance_id,
+                              power_state=current_power_state,
+                              vm_state=vm_states.ACTIVE,
+                              task_state=task_states.REBOOTING)
+
+        if instance_ref['power_state'] != power_state.RUNNING:
+            state = instance_ref['power_state']
+            running = power_state.RUNNING
+            LOG.warn(_('trying to reboot a non-running '
+                       'instance: %(instance_id)s (state: %(state)s '
+                       'expected: %(running)s)') % locals(),
+                     context=context)
+
+        network_info = self._get_instance_nw_info(context, instance_ref)
+        self.driver.reboot(instance_ref, network_info)
+
+        # Code unique to  Reddwarf:
+        #TODO(tim.simpson): Setting this to "paused" is unclear. Once the
+        # status code is cleaned up, change this to RESTART or something.
+        dbapi.guest_status_update(instance_id, power_state.PAUSED, "paused")
+        # End unique Reddwarf code.
+
+        current_power_state = self._get_power_state(context, instance_ref)
+        self._instance_update(context,
+                              instance_id,
+                              power_state=current_power_state,
+                              vm_state=vm_states.ACTIVE,
+                              task_state=None)
 
     def resize_volume(self, context, instance_id, volume_id):
         """

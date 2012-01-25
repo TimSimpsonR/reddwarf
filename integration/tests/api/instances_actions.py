@@ -31,6 +31,8 @@ from nova.compute import power_state
 from reddwarf.api.common import dbaas_mapping
 from reddwarf.guest.dbaas import LocalSqlClient
 from reddwarf.utils import poll_until
+from reddwarfclient.instances import REBOOT_HARD
+import tests
 from tests.api.instances import GROUP as INSTANCE_GROUP
 from tests.api.instances import GROUP_START
 from tests.api.instances import GROUP_TEST
@@ -39,7 +41,6 @@ from tests import util
 
 
 GROUP = "dbaas.api.instances.actions"
-GROUP_LIST = [GROUP, INSTANCE_GROUP, GROUP_TEST]
 MYSQL_USERNAME = "test_user"
 MYSQL_PASSWORD = "abcde"
 
@@ -70,10 +71,13 @@ class MySqlConnection(object):
             raise ex
 
 
+TIME_OUT_TIME = 4 * 60
 
-@test(groups=GROUP_LIST, depends_on_groups=[GROUP_START])
-class RestartTests(object):
-    """Test restarts."""
+class RebootTestBase(object):
+    """Tests restarting MySQL."""
+
+    def call_reboot(self):
+        raise NotImplementedError()
 
     @property
     def instance(self):
@@ -90,18 +94,19 @@ class RestartTests(object):
     def find_mysql_proc_on_instance(self):
         return util.find_mysql_procid_on_instance(self.instance_local_id)
 
-    @before_class
-    def create_user(self):
-        """Create a MySQL user we can use for this test."""
+    def set_up(self):
         address = instance_info.get_address()
         assert_equal(1, len(address), "Instance must have one fixed ip.")
         self.connection = MySqlConnection(address[0])
         self.dbaas = instance_info.dbaas
+
+    def create_user(self):
+        """Create a MySQL user we can use for this test."""
+
         users = [{"name": MYSQL_USERNAME, "password": MYSQL_PASSWORD,
                   "database": MYSQL_USERNAME}]
         self.dbaas.users.create(instance_info.id, users)
 
-    @test
     def ensure_mysql_is_running(self):
         """Make sure MySQL is accessible before restarting."""
         self.connection.connect()
@@ -116,27 +121,27 @@ class RestartTests(object):
     def wait_for_broken_connection(self):
         """Wait until our connection breaks."""
         poll_until(self.connection.is_connected,
-                   lambda connected : not connected, time_out = 60)
+                   lambda connected : not connected, time_out = TIME_OUT_TIME)
 
     def wait_for_successful_restart(self):
         """Wait until status becomes running."""
         def is_finished_rebooting():
             instance = self.instance
-            if instance.status == "ACTIVE":
-                return True
-            assert_equal("REBOOT", instance.status)
+            if instance.status == "REBOOT":
+                return False
+            assert_equal("ACTIVE", instance.status)
+            return True
 
-        poll_until(is_finished_rebooting, time_out = 60)
+        poll_until(is_finished_rebooting, time_out = TIME_OUT_TIME)
 
     def assert_mysql_proc_is_different(self):
         new_proc_id = self.find_mysql_proc_on_instance()
         assert_not_equal(new_proc_id, self.proc_id,
                          "MySQL process ID should be different!")
 
-    @test(depends_on=[ensure_mysql_is_running])
-    def test_successful_restart(self):
+    def successful_restart(self):
         """Restart MySQL via the REST API successfully."""
-        self.instance.reboot()
+        self.call_reboot()
         self.wait_for_broken_connection()
         self.wait_for_successful_restart()
         self.assert_mysql_proc_is_different()
@@ -158,22 +163,107 @@ class RestartTests(object):
         """Wait until status becomes running."""
         def is_finished_rebooting():
             instance = self.instance
-            if instance.status == "SHUTDOWN":
-                return True
-            assert_equal("REBOOT", instance.status)
+            if instance.status == "REBOOT":
+                return False
+            assert_equal("SHUTDOWN", instance.status)
+            return True
 
-        poll_until(is_finished_rebooting, time_out = 60)
+        poll_until(is_finished_rebooting, time_out = TIME_OUT_TIME)
 
-    @test(depends_on=[test_successful_restart])
-    def test_unsuccessful_restart(self):
+    def unsuccessful_restart(self):
         """Restart MySQL via the REST when it should fail, assert it does."""
         self.mess_up_mysql()
-        self.instance.reboot()
+        self.call_reboot()
         self.wait_for_broken_connection()
         self.wait_for_failure_status()
 
-    @after_class(always_run=True)
     def restart_normally(self):
         """Fix iblogs and reboot normally."""
         self.fix_mysql()
         self.test_successful_restart()
+
+
+@test(groups=[tests.INSTANCES, INSTANCE_GROUP, GROUP],
+      depends_on_groups=[GROUP_START])
+class RestartTests(RebootTestBase):
+    """Tests restarting MySQL."""
+
+    def call_reboot(self):
+        self.instance.reboot()
+
+    @before_class
+    def test_set_up(self):
+        self.set_up()
+        self.create_user()
+
+    @test
+    def test_ensure_mysql_is_running(self):
+        """Make sure MySQL is accessible before restarting."""
+        self.ensure_mysql_is_running()
+
+    @test(depends_on=[test_ensure_mysql_is_running])
+    def test_successful_restart(self):
+        """Restart MySQL via the REST API successfully."""
+        self.successful_restart()
+
+    @test(depends_on=[test_successful_restart])
+    def test_unsuccessful_restart(self):
+        """Restart MySQL via the REST when it should fail, assert it does."""
+        self.unsuccessful_restart()
+
+    @after_class(always_run=True)
+    def test_restart_normally(self):
+        """Fix iblogs and reboot normally."""
+        self.restart_normally()
+
+
+
+@test(groups=[tests.INSTANCES, INSTANCE_GROUP, GROUP],
+      depends_on_groups=[GROUP_START], depends_on=[RestartTests])
+class RebootTests(RebootTestBase):
+    """Tests restarting MySQL."""
+
+    def call_reboot(self):
+        self.instance.reboot(type=REBOOT_HARD)
+
+    @before_class
+    def test_set_up(self):
+        self.set_up()
+
+    @test
+    def test_ensure_mysql_is_running(self):
+        """Make sure MySQL is accessible before restarting."""
+        self.ensure_mysql_is_running()
+
+    @test(depends_on=[test_ensure_mysql_is_running])
+    def test_successful_restart(self):
+        """Restart MySQL via the REST API successfully."""
+        self.successful_restart()
+
+    @test(depends_on=[test_successful_restart])
+    def test_unsuccessful_restart(self):
+        """Restart MySQL via the REST when it should fail, assert it does."""
+        self.unsuccessful_restart()
+
+    @after_class(always_run=True)
+    def test_restart_normally(self):
+        """Fix iblogs and reboot normally."""
+        self.restart_normally()
+#
+#    @test
+#    def test_ensure_mysql_is_running(self):
+#        """Make sure MySQL is accessible before restarting."""
+#        self.ensure_mysql_is_running()
+#
+#    @test(depends_on=[test_ensure_mysql_is_running])
+#    def test_successful_restart(self):
+#        """Restart MySQL via the REST API successfully."""
+#        self.successful_restart()
+#
+#    @test(depends_on=[test_successful_restart])
+#    def test_unsuccessful_restart(self):
+#        self.unsuccessful_restart()
+#
+#    @after_class(always_run=True)
+#    def test_restart_normally(self):
+#        self.restart_normally()

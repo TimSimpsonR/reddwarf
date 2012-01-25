@@ -16,14 +16,10 @@ from nova import exception
 from nova import flags
 from nova import log as logging
 from nova import rpc
-<<<<<<< HEAD
 from nova.compute import api as nova_compute_api
-=======
 from nova.compute import task_states
 from nova.compute import vm_states
-from nova.compute import api as nova_compute_api
 from nova.scheduler import api as scheduler_api
->>>>>>> * Added the reboot method to the API.
 
 
 FLAGS = flags.FLAGS

@@ -46,7 +46,7 @@ class Instance(base.Resource):
         :param type: either :data:`REBOOT_SOFT` to restart MySQL, or
                      `REBOOT_HARD` to restart the underlying VM.
         """
-        self.manager.reboot(self, type)
+        self.manager.reboot(self.id, type)
 
 
 class Instances(base.ManagerWithFind):
@@ -133,7 +133,7 @@ class Instances(base.ManagerWithFind):
         body = {"resize": {"volume": {"size": volume_size}}}
         self._action(instance_id, body)
 
-    def reboot(self, server, type=REBOOT_SOFT):
+    def reboot(self, instance_id, type=REBOOT_SOFT):
         """
         Reboot a server.
 
@@ -141,4 +141,5 @@ class Instances(base.ManagerWithFind):
         :param type: either :data:`REBOOT_SOFT` for a software-level reboot,
                      or `REBOOT_HARD` for a virtual power cycle hard reboot.
         """
-        self._action('reboot', server, {'type': type})
+        body = {'reboot': {'type': type}}
+        self._action(instance_id, body)
