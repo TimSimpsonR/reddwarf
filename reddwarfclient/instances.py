@@ -17,8 +17,11 @@ from novaclient import base
 
 import exceptions
 
-
 from reddwarfclient.common import check_for_exceptions
+
+
+REBOOT_SOFT, REBOOT_HARD = 'SOFT', 'HARD'
+
 
 class Instance(base.Resource):
     """
@@ -35,6 +38,15 @@ class Instance(base.Resource):
         Delete the instance.
         """
         self.manager.delete(self)
+
+    def reboot(self, type=REBOOT_SOFT):
+        """
+        Reboot the server.
+
+        :param type: either :data:`REBOOT_SOFT` to restart MySQL, or
+                     `REBOOT_HARD` to restart the underlying VM.
+        """
+        self.manager.reboot(self, type)
 
 
 class Instances(base.ManagerWithFind):
@@ -107,6 +119,9 @@ class Instances(base.ManagerWithFind):
             raise exceptions.from_response(resp, body)
 
     def _action(self, instance_id, body):
+        """
+        Perform a server "action" -- reboot/rebuild/resize/etc.
+        """
         url = "/instances/%s/action" % instance_id
         resp, body = self.api.client.post(url, body=body)
         check_for_exceptions(resp, body)
@@ -117,3 +132,13 @@ class Instances(base.ManagerWithFind):
         """
         body = {"resize": {"volume": {"size": volume_size}}}
         self._action(instance_id, body)
+
+    def reboot(self, server, type=REBOOT_SOFT):
+        """
+        Reboot a server.
+
+        :param server: The :class:`Server` (or its ID) to share onto.
+        :param type: either :data:`REBOOT_SOFT` for a software-level reboot,
+                     or `REBOOT_HARD` for a virtual power cycle hard reboot.
+        """
+        self._action('reboot', server, {'type': type})

@@ -16,7 +16,14 @@ from nova import exception
 from nova import flags
 from nova import log as logging
 from nova import rpc
+<<<<<<< HEAD
 from nova.compute import api as nova_compute_api
+=======
+from nova.compute import task_states
+from nova.compute import vm_states
+from nova.compute import api as nova_compute_api
+from nova.scheduler import api as scheduler_api
+>>>>>>> * Added the reboot method to the API.
 
 
 FLAGS = flags.FLAGS
@@ -45,3 +52,12 @@ class API(nova_compute_api.API):
                  {"method": "resize_volume",
                  "args": {"instance_id": instance['id'],
                           "volume_id": volume_id}})
+
+    @scheduler_api.reroute_compute("restart")
+    def restart(self, context, instance_id):
+        """Reboot the given instance."""
+        self.update(context,
+                    instance_id,
+                    vm_state=vm_states.ACTIVE,
+                    task_state=task_states.REBOOTING)
+        self._cast_compute_message('restart', context, instance_id)

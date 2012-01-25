@@ -26,6 +26,7 @@ from nova.compute import vm_states
 from nova.compute import power_state
 from nova.compute.manager import ComputeManager
 from nova.notifier import api as notifier
+from nova.rpc.common import RemoteError
 from nova.volume import api as volume_api
 
 from reddwarf import guest
@@ -248,9 +249,12 @@ class ReddwarfComputeManager(ComputeManager):
         instance_ref = self.db.instance_get(context, instance_id)
         self._instance_update(context, instance_id,
                               task_state=task_states.REBOOTING)
-        self.guest_api.restart(context, instance_id)
-        self._instance_update(context,instance_id,
-                              task_state=None)
+        try:
+            self.guest_api.restart(context, instance_id)
+        except RemoteError:
+            LOG.error("Failure to restart MySQL.")
+        finally:
+            self._instance_update(context,instance_id, task_state=None)
 
     def run_instance(self, context, instance_id, **kwargs):
         """Launch a new instance with specified options.

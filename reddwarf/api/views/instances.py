@@ -135,8 +135,8 @@ class ViewBuilder(object):
         IDs to their states.
 
         """
-        if server['status'] == 'ERROR':
-            return 'ERROR'
+        if server['status'] in ['ERROR', 'REBOOT']:
+            return server['status']
         else:
             try:
                 state = guest_states[server['id']]

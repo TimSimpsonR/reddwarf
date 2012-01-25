@@ -96,11 +96,12 @@ class Controller(object):
         reboot_type = self._get_reboot_type(input_dict)
         LOG.debug("%s - %s", req.environ, req.body)
         ctxt = req.environ['nova.context']
+        common.instance_exists(ctxt, id, self.compute_api)
         local_id = dbapi.localid_from_uuid(id)
         if reboot_type == "HARD":
             self._action_reboot_hard(ctxt, local_id)
         else:
-            self._action_reboot_soft(req, id)
+            self._action_reboot_soft(ctxt, local_id)
 
     def _action_reboot_hard(self, ctxt, local_id):
         try:
@@ -111,9 +112,8 @@ class Controller(object):
             raise exception.UnprocessableEntity()
 
     def _action_reboot_soft(self, ctxt, local_id):
-        common.instance_exists(ctxt, local_id, self.compute_api)
         try:
-            self.compute_api.reboot(ctxt, local_id)
+            self.compute_api.restart(ctxt, local_id)
             return exc.HTTPAccepted()
         except Exception as err:
             LOG.error(err)

@@ -23,7 +23,7 @@ from proboscis.asserts import assert_raises
 from proboscis.asserts import assert_true
 from proboscis.asserts import fail
 
-import tests
+from tests.api.instances import create_new_instance
 from tests.api.instances import instance_info
 from tests.util import test_config
 from tests.util import create_dbaas_client
@@ -32,7 +32,8 @@ from tests.util.users import Requirements
 GROUP="dbaas.api.mgmt.hosts"
 
 
-@test(groups=[tests.DBAAS_API, GROUP, tests.PRE_INSTANCES], depends_on_groups=["services.initialize"])
+@test(groups=[tests.DBAAS_API, GROUP, tests.PRE_INSTANCES],
+      depends_on_groups=["services.initialize"], enabled=create_new_instance())
 class HostsBeforeInstanceCreation(object):
 
     @before_class
@@ -81,7 +82,8 @@ class HostsBeforeInstanceCreation(object):
         assert_raises(exceptions.NotFound, self.client.hosts.get, "host@$%3dne")
 
 
-@test(groups=[tests.INSTANCES, GROUP], depends_on_groups=["dbaas.listing"])
+@test(groups=[tests.INSTANCES, GROUP], depends_on_groups=["dbaas.listing"],
+      enabled=create_new_instance())
 class HostsAfterInstanceCreation(object):
 
     @before_class
