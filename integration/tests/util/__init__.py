@@ -59,7 +59,8 @@ def assert_mysql_failure_msg_was_permissions_issue(msg):
     """Assert a message cited a permissions issue and not something else."""
     pos_error = re.compile(".*Host '[\w\.]*' is not allowed to connect to "
                            "this MySQL server.*")
-    pos_error1 = re.compile(".*Access denied for user '[\w\!\@\#]*'@'[\w\.]*'.*")
+    pos_error1 = re.compile(".*Access denied for user "
+                            "'[\w\*\!\@\#\^\&]*'@'[\w\.]*'.*")
     assert_true(pos_error.match(msg) or pos_error1.match(msg),
                 "Expected to see a failure to connect that cited "
                 "a permissions issue. Instead saw the message: %s" % msg)
@@ -69,7 +70,8 @@ def assert_mysql_failure_msg_was_permissions_issue(msg):
 def assert_mysql_failure_msg_was_permissions_issue_is_passed():
     assert_mysql_failure_msg_was_permissions_issue(
         """(1045, "Access denied for user 'tes!@#tuser'@'10.0.2.15'""")
-
+    assert_mysql_failure_msg_was_permissions_issue(
+        """(1045, "Access denied for user 'anous*&^er'@'10.0.2.15'""")
 
 @test(groups="unit")
 def assert_mysql_failure_msg_was_permissions_issue_is_failed():

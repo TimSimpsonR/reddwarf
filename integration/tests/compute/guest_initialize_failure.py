@@ -173,6 +173,10 @@ class VerifyManagerAbortsInstanceWhenGuestInstallFails(InstanceTest):
     @before_class
     def setUp(self):
         """Sets up the client."""
+        #TODO(tim.simpson) This is a hack to wait for tests above to finish;
+        #                  otherwise the volume will not be deallocated the
+        #                  scheduler will fail the new instance.
+        time.sleep(30)
         restart_compute_service(['--reddwarf_guest_initialize_time_out=%d'
                                  % GUEST_INSTALL_TIMEOUT])
         self.init("TEST_FAIL_GUEST_")
