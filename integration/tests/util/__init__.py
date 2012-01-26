@@ -32,12 +32,15 @@ import subprocess
 
 from novaclient.v1_1.client import Client
 from sqlalchemy import create_engine
+from sqlalchemy.exc import OperationalError
 
 from nova import flags
 from nova import utils
+from proboscis.asserts import assert_false
+from proboscis.asserts import assert_true
+from proboscis.asserts import fail
 from reddwarf import dns # import for flag values
 from reddwarf.notifier import logfile_notifier  # This is here so flags are loaded
-from nose.tools import assert_false
 from reddwarf import exception
 from reddwarf.utils import poll_until
 from reddwarfclient import Dbaas
@@ -46,8 +49,25 @@ from tests.util.client import TestClient as TestClient
 from tests.util.topics import hosts_up
 
 
-
 FLAGS = flags.FLAGS
+
+
+def assert_mysql_failure_msg_was_permissions_issue(msg):
+    """Assert a message cited a permissions issue and not something else."""
+    pos_error = re.compile(".*Host '[\w\.]*' is not allowed to connect to "
+                           "this MySQL server.*")
+    pos_error1 = re.compile(".*Access denied for user '[\w]*'@'[\w\.]*'.*")
+    assert_true(pos_error.match(msg) or pos_error1.match(msg),
+                "Expected to see a failure to connect that cited "
+                "a permissions issue. Instead saw the message: %s" % msg)
+
+def assert_mysql_connection_fails(user_name, password, ip):
+    engine = init_engine(user_name, password, ip)
+    try:
+        engine.connect()
+        fail("Should have failed to connect.")
+    except OperationalError as oe:
+        assert_mysql_failure_msg_was_permissions_issue(oe.message)
 
 
 _dns_entry_factory = None

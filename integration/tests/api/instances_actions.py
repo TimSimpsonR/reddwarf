@@ -210,7 +210,7 @@ class RestartTests(RebootTestBase):
     @after_class(always_run=True)
     def test_successful_restart(self):
         """Restart MySQL via the REST API successfully."""
-        self.successful_restart()    
+        self.successful_restart()
 
 
 @test(groups=[tests.INSTANCES, INSTANCE_GROUP, GROUP],

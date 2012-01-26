@@ -39,18 +39,17 @@ class Reporter(object):
 
     def _update_instance(self, id):
         root = "%s/%s" % (self.root_path, id)
-        try:
-            shutil.copyfile("/vz/private/%s/var/log/firstboot" % id,
-                            "%s-firstboot.log" % root)
-        except (shutil.Error, IOError) as err:
-            self.log("ERROR logging firstboot for instance id %s! : %s"
-                     % (id, err))
-        try:
-            shutil.copyfile("/vz/private/%s/var/log/syslog" % id,
-                            "%s-syslog.log" % root)
-        except (shutil.Error, IOError) as err:
-            self.log("ERROR logging firstboot for instance id %s! : %s"
-                     % (id, err))
+        def save_file(path, short_name):
+            try:
+                shutil.copyfile("/vz/private/%s/%s" % (id, path),
+                                "%s-%s.log" % (root, short_name))
+            except (shutil.Error, IOError) as err:
+                self.log("ERROR logging %s for instance id %s! : %s"
+                % (path, id, err))
+
+        save_file("/var/log/firstboot", "firstboot")
+        save_file("/var/log/syslog", "syslog")
+        save_file("/var/log/nova/guest.log", "nova-guest")
 
     def _update_instances(self):
         for id in self._find_all_instance_ids():

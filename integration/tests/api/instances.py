@@ -97,7 +97,7 @@ class InstanceTestInfo(object):
         self.user_context = None # A regular user context
 
     def check_database(self, dbname):
-        return check_database(self.local_id, dbname)
+        return check_database(self.get_local_id(), dbname)
 
     def expected_dns_entry(self):
         """Returns expected DNS entry for this instance.

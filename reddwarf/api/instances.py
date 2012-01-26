@@ -96,7 +96,6 @@ class Controller(object):
         reboot_type = self._get_reboot_type(input_dict)
         LOG.debug("%s - %s", req.environ, req.body)
         ctxt = req.environ['nova.context']
-        common.instance_exists(ctxt, id, self.compute_api)
         local_id = dbapi.localid_from_uuid(id)
         if reboot_type == "HARD":
             self._action_reboot_hard(ctxt, local_id)
