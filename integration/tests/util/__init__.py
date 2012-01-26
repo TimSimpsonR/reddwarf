@@ -36,9 +36,12 @@ from sqlalchemy.exc import OperationalError
 
 from nova import flags
 from nova import utils
+from proboscis import test
 from proboscis.asserts import assert_false
+from proboscis.asserts import assert_raises
 from proboscis.asserts import assert_true
 from proboscis.asserts import fail
+from proboscis.asserts import ASSERTION_ERROR
 from reddwarf import dns # import for flag values
 from reddwarf.notifier import logfile_notifier  # This is here so flags are loaded
 from reddwarf import exception
@@ -56,10 +59,23 @@ def assert_mysql_failure_msg_was_permissions_issue(msg):
     """Assert a message cited a permissions issue and not something else."""
     pos_error = re.compile(".*Host '[\w\.]*' is not allowed to connect to "
                            "this MySQL server.*")
-    pos_error1 = re.compile(".*Access denied for user '[\w]*'@'[\w\.]*'.*")
+    pos_error1 = re.compile(".*Access denied for user '[\w\!\@\#]*'@'[\w\.]*'.*")
     assert_true(pos_error.match(msg) or pos_error1.match(msg),
                 "Expected to see a failure to connect that cited "
                 "a permissions issue. Instead saw the message: %s" % msg)
+
+
+@test(groups="unit")
+def assert_mysql_failure_msg_was_permissions_issue_is_passed():
+    assert_mysql_failure_msg_was_permissions_issue(
+        """(1045, "Access denied for user 'tes!@#tuser'@'10.0.2.15'""")
+
+
+@test(groups="unit")
+def assert_mysql_failure_msg_was_permissions_issue_is_failed():
+    assert_raises(ASSERTION_ERROR,
+                  assert_mysql_failure_msg_was_permissions_issue, "Unknown db")
+
 
 def assert_mysql_connection_fails(user_name, password, ip):
     engine = init_engine(user_name, password, ip)
