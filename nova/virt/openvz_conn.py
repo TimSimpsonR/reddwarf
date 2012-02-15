@@ -757,7 +757,7 @@ class OpenVzConnection(driver.ComputeDriver):
         try:
             self._set_instance_size(instance)
             if restart_instance:
-                self.reboot(instance)
+                self.reboot(instance, None)
             return True
         except Exception:
             raise exception.InstanceUnacceptable(
@@ -780,7 +780,6 @@ class OpenVzConnection(driver.ComputeDriver):
         instance_memory_pages = self._calc_pages(instance_type['memory_mb'])
         percent_of_resource = self._percent_of_resource(
             instance_type['memory_mb'])
-        instance_vcpus = instance_type['vcpus']
 
         self._set_vmguarpages(instance, instance_memory_pages)
         self._set_privvmpages(instance, instance_memory_pages)
@@ -790,7 +789,7 @@ class OpenVzConnection(driver.ComputeDriver):
         if FLAGS.ovz_use_cpulimit:
             self._set_cpulimit(instance, percent_of_resource)
         if FLAGS.ovz_use_cpus:
-            self._set_cpus(instance, instance_vcpus)
+            self._set_cpus(instance, instance_type['vcpus'])
         if FLAGS.ovz_use_ioprio:
             self._set_ioprio(instance, percent_of_resource)
         if FLAGS.ovz_use_disk_quotas:
@@ -880,7 +879,7 @@ class OpenVzConnection(driver.ComputeDriver):
         except ProcessExecutionError as err:
             LOG.error(_('Error setting kmemsize: %s') % err)
             raise exception.Error(
-                _('Error setting kmemsize to %(kmemsize) on %(id)s') %
+                _('Error setting kmemsize to %(kmemsize)s on %(id)s') %
                 {'kmemsize': kmemsize, 'id': instance['id']})
 
     def _set_cpuunits(self, instance, percent_of_resource):
@@ -967,9 +966,6 @@ class OpenVzConnection(driver.ComputeDriver):
         of cores that are presented to each container and if this fails to set
         *ALL* cores will be presented to every container, that be bad.
         """
-        inst_typ = instance_types.get_instance_type(
-            instance['instance_type_id']
-        )
         vcpus = vcpus * multiplier
         # TODO(imsplitbit): We need to fix this to not allow allocation of
         # more than the maximum allowed cpus on the host.
