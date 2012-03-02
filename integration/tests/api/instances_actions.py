@@ -48,6 +48,7 @@ from tests.api.instances import GROUP_START
 from tests.api.instances import instance_info
 from tests.api.instances import assert_unprocessable
 from tests import util
+from tests.util import test_config
 
 
 GROUP = "dbaas.api.instances.actions"
@@ -370,29 +371,23 @@ class ResizeInstanceVolume(object):
                      "Returned list: %s" % (name, databases))
 
 
-@test(groups=[tests.INSTANCES, INSTANCE_GROUP, GROUP],
+@test(groups=[tests.INSTANCES, INSTANCE_GROUP, GROUP, GROUP + ".update_guest"],
       depends_on_groups=[GROUP_START])
 class UpdateGuest(object):
 
-    #TODO(tim.simpson): 1. Make the "NEXT_VERSION" var driven by a conf value.
-    #                   2. Figure out a way to automatically save that this test
-    #                      has been run, so Reddwarfers on a CI box won't risk
-    #                      running this test twice (its really only going to
-    #                      work for CI boxes).
-
-    NEXT_VERSION = "Dopple-Pete"
+    NEXT_VERSION = test_config.values.get("guest-next-version", None)
 
     def get_version(self):
         info = instance_info.dbaas_admin.diagnostics.get(instance_info.id)
         return info.version
 
-    @before_class
+    @before_class(enabled=UpdateGuest.NEXT_VERSION is not None)
     def check_version_is_old(self):
         """Make sure we have the old version before proceeding."""
         self.old_version = get_version()
         assert_not_equal(self.old_version, NEXT_VERSION)
 
-    @test
+    @test(enabled=UpdateGuest.NEXT_VERSION is not None)
     def update_and_wait_to_finish(self):
         instance_info.dbaas_admin.update_guest(instance_info.id)
         def finished():
