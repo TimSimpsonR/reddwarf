@@ -371,23 +371,23 @@ class ResizeInstanceVolume(object):
                      "Returned list: %s" % (name, databases))
 
 
+NEXT_GUEST_VERSION = test_config.values.get("guest-next-version", None)
+
 @test(groups=[tests.INSTANCES, INSTANCE_GROUP, GROUP, GROUP + ".update_guest"],
       depends_on_groups=[GROUP_START])
 class UpdateGuest(object):
-
-    NEXT_VERSION = test_config.values.get("guest-next-version", None)
 
     def get_version(self):
         info = instance_info.dbaas_admin.diagnostics.get(instance_info.id)
         return info.version
 
-    @before_class(enabled=UpdateGuest.NEXT_VERSION is not None)
+    @before_class(enabled=NEXT_GUEST_VERSION is not None)
     def check_version_is_old(self):
         """Make sure we have the old version before proceeding."""
         self.old_version = get_version()
         assert_not_equal(self.old_version, NEXT_VERSION)
 
-    @test(enabled=UpdateGuest.NEXT_VERSION is not None)
+    @test(enabled=NEXT_GUEST_VERSION is not None)
     def update_and_wait_to_finish(self):
         instance_info.dbaas_admin.update_guest(instance_info.id)
         def finished():

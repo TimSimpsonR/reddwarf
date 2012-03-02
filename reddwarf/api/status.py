@@ -22,7 +22,7 @@ from nova.api.openstack import common
 from nova import db
 
 from reddwarf.db import api as dbapi
-from reddwarf.guest import status as Guest_status
+from reddwarf.guest import status as guest_statuses
 from reddwarf.exception import NotFound
 from reddwarf.exception import UnprocessableEntity
 
@@ -40,14 +40,14 @@ class InstanceStatus(object):
                 ):
         #self.vm_state = vm_state
         #self.power_state = power_state
-        self.guest_state = guest_state or Guest_status.SHUTDOWN.code
+        self.guest_state = guest_state or guest_statuses.SHUTDOWN.code
         self.guest_status = guest_status
         # TODO(ed-): incorporate volume status.
-        self.server_status = server_status or Guest_status.SHUTDOWN.description
+        self.server_status = server_status or guest_statuses.SHUTDOWN.description
 
         assert isinstance(self.guest_state, int) or isinstance(self.guest_state, long)
         assert isinstance(self.server_status, types.StringTypes)
-        assert Guest_status.GuestStatus.is_valid_code(self.guest_state)
+        assert guest_statuses.GuestStatus.is_valid_code(self.guest_state)
 
     @staticmethod
     def load_from_db(context, instance_id):
@@ -66,7 +66,7 @@ class InstanceStatus(object):
     @property
     def is_sql_running(self):
         responsive = [
-            Guest_status.RUNNING.code,
+            guest_statuses.RUNNING.code,
             ]
         return self.guest_state in responsive
 
@@ -86,9 +86,9 @@ class InstanceStatus(object):
             return self.server_status
         # TODO(ed-) Possibly a mapping error resulting in this function
         # returning a None. Should raise an exception instead
-        if Guest_status.PAUSED == self.guest_state: # Use GuestStatus' smarter comparator.
+        if guest_statuses.PAUSED == self.guest_state: # Use GuestStatus' smarter comparator.
             return "REBOOT"
-        return Guest_status.GuestStatus.from_description(self.guest_state).description
+        return guest_statuses.GuestStatus.from_code(self.guest_state).description
 
     def get_guest_status(self):
         """Build out the guest status information"""
