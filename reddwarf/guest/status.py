@@ -18,10 +18,15 @@
 class GuestStatus(object):
     _lookup = {}
 
-    def __init__(self, code, description):
+    def __init__(self, code, description, api_status):
         self._code = code
         self._description = description
+        self._api_status = api_status
         GuestStatus._lookup[code] = self
+
+    @property
+    def api_status(self):
+        return self._api_status
 
     @property
     def code(self):
@@ -59,13 +64,14 @@ class GuestStatus(object):
     def is_valid_code(code):
         return code in GuestStatus._lookup
 
-RUNNING  = GuestStatus(0x01, 'RUNNING')
-BLOCKED  = GuestStatus(0x02, 'BLOCKED')
-PAUSED   = GuestStatus(0x03, 'PAUSED')
-SHUTDOWN = GuestStatus(0x04, 'SHUTDOWN')
-CRASHED  = GuestStatus(0x06, 'CRASHED')
-FAILED   = GuestStatus(0x08, 'FAILED')
-BUILDING = GuestStatus(0x09, 'BUILDING')
-UNKNOWN  = GuestStatus(0x16, 'UNKNOWN')
+RUNNING  = GuestStatus(0x01, 'RUNNING', 'ACTIVE')
+BLOCKED  = GuestStatus(0x02, 'BLOCKED', 'BLOCKED')
+PAUSED   = GuestStatus(0x03, 'PAUSED', 'SHUTDOWN')
+SHUTDOWN = GuestStatus(0x04, 'SHUTDOWN', 'SHUTDOWN')
+CRASHED  = GuestStatus(0x06, 'CRASHED', 'SHUTDOWN')
+FAILED   = GuestStatus(0x08, 'FAILED', 'FAILED')
+BUILDING = GuestStatus(0x09, 'BUILDING', 'BUILD')
+UNKNOWN  = GuestStatus(0x16, 'UNKNOWN', 'ERROR')
+
 
 GuestStatus.__init__ = None

@@ -250,6 +250,7 @@ pid_t AptGuest::_install_new_self() {
 
 void AptGuest::install_self_update() {
     NOVA_LOG_INFO("Installing a new version of Sneaky Pete...");
+    update(self_update_time_out);
     pid_t pid = _install_new_self();
     NOVA_LOG_INFO("Waiting for oblivion...");
     wait_for_proc_to_finish(pid, self_update_time_out);
