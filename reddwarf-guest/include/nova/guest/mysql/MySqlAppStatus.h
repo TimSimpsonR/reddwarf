@@ -54,7 +54,7 @@ namespace nova { namespace guest { namespace mysql {
                 CRASHED = 0x06, // When MySQL died after starting.
                 FAILED = 0x08,
                 BUILDING = 0x09, // MySQL is being installed / prepared.
-                UNKNOWN=0x10  // Set by Nova when the guest becomes unresponsive
+                UNKNOWN=0x16  // Set by Nova when the guest becomes unresponsive
             };
 
             MySqlAppStatus(nova::db::mysql::MySqlConnectionWithDefaultDbPtr

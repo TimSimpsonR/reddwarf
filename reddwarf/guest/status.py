@@ -16,6 +16,11 @@
 """Status of the application on the guest."""
 
 class GuestStatus(object):
+    """Represents the status of the guest application and agent.
+
+    Code and description are what is stored in the database. "api_status"
+    refers to the status which comes back from the REST API.
+    """
     _lookup = {}
 
     def __init__(self, code, description, api_status):
@@ -37,17 +42,14 @@ class GuestStatus(object):
         return self._description
 
     def __eq__(self, other):
-        if isinstance(other, GuestStatus):
-            return self.code == other.code
-        if type(other) == int:
-            return self.code == other
-        if type(other) == str:
-            return self.description == other
+        if not isinstance(other, GuestStatus):
+            return False
+        return self.code == other.code
 
     @staticmethod
     def from_code(code):
         if code not in GuestStatus._lookup:
-            msg = 'Status code %d is not a valid GuestStatus.'
+            msg = 'Status code %s is not a valid GuestStatus integer code.'
             raise ValueError(msg % code)
         return GuestStatus._lookup[code]
 
@@ -64,14 +66,16 @@ class GuestStatus(object):
     def is_valid_code(code):
         return code in GuestStatus._lookup
 
-RUNNING  = GuestStatus(0x01, 'RUNNING', 'ACTIVE')
-BLOCKED  = GuestStatus(0x02, 'BLOCKED', 'BLOCKED')
-PAUSED   = GuestStatus(0x03, 'PAUSED', 'SHUTDOWN')
-SHUTDOWN = GuestStatus(0x04, 'SHUTDOWN', 'SHUTDOWN')
-CRASHED  = GuestStatus(0x06, 'CRASHED', 'SHUTDOWN')
-FAILED   = GuestStatus(0x08, 'FAILED', 'FAILED')
-BUILDING = GuestStatus(0x09, 'BUILDING', 'BUILD')
-UNKNOWN  = GuestStatus(0x16, 'UNKNOWN', 'ERROR')
+
+RUNNING  = GuestStatus(0x01, 'running', 'ACTIVE')
+BLOCKED  = GuestStatus(0x02, 'blocked', 'BLOCKED')
+PAUSED   = GuestStatus(0x03, 'paused', 'SHUTDOWN')
+SHUTDOWN = GuestStatus(0x04, 'shutdown', 'SHUTDOWN')
+CRASHED  = GuestStatus(0x06, 'crashed', 'SHUTDOWN')
+FAILED   = GuestStatus(0x08, 'failed to spawn', 'FAILED')
+BUILDING = GuestStatus(0x09, 'building', 'BUILD')
+UNKNOWN  = GuestStatus(0x16, 'unknown', 'ERROR')
 
 
+# Dissuade further additions at run-time.
 GuestStatus.__init__ = None
